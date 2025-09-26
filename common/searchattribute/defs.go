@@ -186,35 +186,14 @@ var (
 		RootRunID:            "root_run_id",
 	}
 
-	sqlDbCustomSearchAttributes = map[string]enumspb.IndexedValueType{
-		"Bool01":        enumspb.INDEXED_VALUE_TYPE_BOOL,
-		"Bool02":        enumspb.INDEXED_VALUE_TYPE_BOOL,
-		"Bool03":        enumspb.INDEXED_VALUE_TYPE_BOOL,
-		"Datetime01":    enumspb.INDEXED_VALUE_TYPE_DATETIME,
-		"Datetime02":    enumspb.INDEXED_VALUE_TYPE_DATETIME,
-		"Datetime03":    enumspb.INDEXED_VALUE_TYPE_DATETIME,
-		"Double01":      enumspb.INDEXED_VALUE_TYPE_DOUBLE,
-		"Double02":      enumspb.INDEXED_VALUE_TYPE_DOUBLE,
-		"Double03":      enumspb.INDEXED_VALUE_TYPE_DOUBLE,
-		"Int01":         enumspb.INDEXED_VALUE_TYPE_INT,
-		"Int02":         enumspb.INDEXED_VALUE_TYPE_INT,
-		"Int03":         enumspb.INDEXED_VALUE_TYPE_INT,
-		"Keyword01":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword02":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword03":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword04":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword05":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword06":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword07":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword08":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword09":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Keyword10":     enumspb.INDEXED_VALUE_TYPE_KEYWORD,
-		"Text01":        enumspb.INDEXED_VALUE_TYPE_TEXT,
-		"Text02":        enumspb.INDEXED_VALUE_TYPE_TEXT,
-		"Text03":        enumspb.INDEXED_VALUE_TYPE_TEXT,
-		"KeywordList01": enumspb.INDEXED_VALUE_TYPE_KEYWORD_LIST,
-		"KeywordList02": enumspb.INDEXED_VALUE_TYPE_KEYWORD_LIST,
-		"KeywordList03": enumspb.INDEXED_VALUE_TYPE_KEYWORD_LIST,
+	defaultNumDbCustomSearchAttributes = map[enumspb.IndexedValueType]int{
+		enumspb.INDEXED_VALUE_TYPE_BOOL:         3,
+		enumspb.INDEXED_VALUE_TYPE_INT:          3,
+		enumspb.INDEXED_VALUE_TYPE_DOUBLE:       3,
+		enumspb.INDEXED_VALUE_TYPE_DATETIME:     3,
+		enumspb.INDEXED_VALUE_TYPE_KEYWORD:      10,
+		enumspb.INDEXED_VALUE_TYPE_KEYWORD_LIST: 3,
+		enumspb.INDEXED_VALUE_TYPE_TEXT:         3,
 	}
 )
 
@@ -258,9 +237,21 @@ func GetSqlDbColName(name string) string {
 	return name
 }
 
-func GetSqlDbIndexSearchAttributes() *persistencespb.IndexSearchAttributes {
+func GetDbIndexSearchAttributes(
+	overwrite map[enumspb.IndexedValueType]int,
+) *persistencespb.IndexSearchAttributes {
+	csa := map[string]enumspb.IndexedValueType{}
+	for saType, defaultNumAttrs := range defaultNumDbCustomSearchAttributes {
+		numAttrs := defaultNumAttrs
+		if value, ok := overwrite[saType]; ok {
+			numAttrs = value
+		}
+		for i := range numAttrs {
+			csa[fmt.Sprintf("%s%02d", saType.String(), i+1)] = saType
+		}
+	}
 	return &persistencespb.IndexSearchAttributes{
-		CustomSearchAttributes: sqlDbCustomSearchAttributes,
+		CustomSearchAttributes: csa,
 	}
 }
 
