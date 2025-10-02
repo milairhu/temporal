@@ -268,6 +268,11 @@ func (s *backfillerTasksSuite) runTestCase(c *backfillTestCase) {
 	// Validate BufferedStarts. More detailed validation must be done in the callbacks.
 	s.Equal(c.ExpectedBufferedStarts, len(invoker.GetBufferedStarts()))
 
+	// Validate RequestId -> WorkflowId mapping
+	for _, start := range invoker.GetBufferedStarts() {
+		s.Equal(start.WorkflowId, invoker.GetWorkflowID(start.RequestId))
+	}
+
 	// Callbacks.
 	if c.ValidateInvoker != nil {
 		c.ValidateInvoker(invoker)

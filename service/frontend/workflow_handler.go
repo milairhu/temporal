@@ -5250,7 +5250,7 @@ func (wh *WorkflowHandler) validateCallbackURL(ns namespace.Name, rawURL string)
 	if u.Scheme == "temporal" {
 		return nil
 	}
-	if !(u.Scheme == "http" || u.Scheme == "https") {
+	if u.Scheme != "http" && u.Scheme != "https" {
 		return status.Errorf(codes.InvalidArgument, "invalid url: unknown scheme: %v", u)
 	}
 	for _, cfg := range wh.config.CallbackEndpointConfigs(ns.String()) {
