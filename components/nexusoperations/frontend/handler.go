@@ -401,7 +401,7 @@ func (c *requestContext) augmentContext(ctx context.Context, header http.Header)
 		func() string { return c.namespace.Name().String() },
 		func() string { return methodNameForMetrics },
 	)
-	if userAgent := header.Get(headerUserAgent); userAgent != "" {
+	if userAgent := header.Get(http.CanonicalHeaderKey(headerUserAgent)); userAgent != "" {
 		// Preserve original strict behavior: only process if exactly one delimiter present.
 		if strings.Count(userAgent, clientNameVersionDelim) == 1 {
 			parts := strings.SplitN(userAgent, clientNameVersionDelim, 2)
