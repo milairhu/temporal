@@ -120,6 +120,7 @@ func (e *InvokerExecuteTaskExecutor) Execute(
 	var invoker *Invoker
 	var scheduler *Scheduler
 	var lastCompletionState *schedulerpb.LastCompletionState
+	var callback *commonpb.Callback
 
 	// Read and deep copy returned components, since we'll continue to access them
 	// outside of this function (outside of the MS lock).
@@ -147,6 +148,13 @@ func (e *InvokerExecuteTaskExecutor) Execute(
 			}
 			lastCompletionState = common.CloneProto(lcs)
 
+			// Set up the completion callback to handle workflow results.
+			cb, err := chasm.GetNexusCallback(ctx, s)
+			if err != nil {
+				return struct{}{}, err
+			}
+			callback = common.CloneProto(cb)
+
 			return struct{}{}, nil
 		},
 		nil,
@@ -166,7 +174,7 @@ func (e *InvokerExecuteTaskExecutor) Execute(
 	ictx := e.newInvokerTaskExecutorContext(ctx, scheduler)
 	result = result.Append(e.terminateWorkflows(ictx, logger, scheduler, invoker.GetTerminateWorkflows()))
 	result = result.Append(e.cancelWorkflows(ictx, logger, scheduler, invoker.GetCancelWorkflows()))
-	sres, startResults := e.startWorkflows(ictx, logger, scheduler, invoker.getEligibleBufferedStarts(), lastCompletionState)
+	sres, startResults := e.startWorkflows(ictx, logger, scheduler, invoker.getEligibleBufferedStarts(), lastCompletionState, callback)
 	result = result.Append(sres)
 
 	// Record action results on the Invoker (internal state), as well as the
@@ -285,6 +293,7 @@ func (e *InvokerExecuteTaskExecutor) startWorkflows(
 	scheduler *Scheduler,
 	starts []*schedulespb.BufferedStart,
 	lastCompletionState *schedulerpb.LastCompletionState,
+	callback *commonpb.Callback,
 ) (result executeResult, startResults []*schedulepb.ScheduleActionResult) {
 	metricsWithTag := e.MetricsHandler.WithTags(
 		metrics.StringTag(metrics.ScheduleActionTypeTag, metrics.ScheduleActionStartWorkflow))
@@ -310,7 +319,7 @@ func (e *InvokerExecuteTaskExecutor) startWorkflows(
 		// Run all starts concurrently.
 		newCtx := ctx.Clone()
 		wg.Go(func() {
-			startResult, err := e.startWorkflow(newCtx, scheduler, start, lastCompletionState)
+			startResult, err := e.startWorkflow(newCtx, scheduler, start, lastCompletionState, callback)
 
 			resultMutex.Lock()
 			defer resultMutex.Unlock()
@@ -504,6 +513,7 @@ func (e *InvokerExecuteTaskExecutor) startWorkflow(
 	scheduler *Scheduler,
 	start *schedulespb.BufferedStart,
 	lastCompletionState *schedulerpb.LastCompletionState,
+	callback *commonpb.Callback,
 ) (*schedulepb.ScheduleActionResult, error) {
 	requestSpec := scheduler.GetSchedule().GetAction().GetStartWorkflow()
 
@@ -529,22 +539,23 @@ func (e *InvokerExecuteTaskExecutor) startWorkflow(
 
 	// TODO - set search attributes
 	request := &workflowservice.StartWorkflowExecutionRequest{
-		Namespace:                scheduler.Namespace,
-		WorkflowId:               start.WorkflowId,
-		WorkflowType:             requestSpec.WorkflowType,
-		TaskQueue:                requestSpec.TaskQueue,
+		CompletionCallbacks:      []*commonpb.Callback{callback},
+		Header:                   requestSpec.Header,
+		Identity:                 scheduler.identity(),
 		Input:                    requestSpec.Input,
+		Memo:                     requestSpec.Memo,
+		Namespace:                scheduler.Namespace,
+		RequestId:                start.RequestId,
+		RetryPolicy:              requestSpec.RetryPolicy,
+		SearchAttributes:         nil,
+		TaskQueue:                requestSpec.TaskQueue,
+		UserMetadata:             requestSpec.UserMetadata,
 		WorkflowExecutionTimeout: requestSpec.WorkflowExecutionTimeout,
+		WorkflowId:               start.WorkflowId,
+		WorkflowIdReusePolicy:    reusePolicy,
 		WorkflowRunTimeout:       requestSpec.WorkflowRunTimeout,
 		WorkflowTaskTimeout:      requestSpec.WorkflowTaskTimeout,
-		Identity:                 scheduler.identity(),
-		RequestId:                start.RequestId,
-		WorkflowIdReusePolicy:    reusePolicy,
-		RetryPolicy:              requestSpec.RetryPolicy,
-		Memo:                     requestSpec.Memo,
-		SearchAttributes:         nil,
-		Header:                   requestSpec.Header,
-		UserMetadata:             requestSpec.UserMetadata,
+		WorkflowType:             requestSpec.WorkflowType,
 	}
 
 	// Set last completion result payload.
